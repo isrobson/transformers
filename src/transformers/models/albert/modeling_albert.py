@@ -49,6 +49,7 @@ from ...modeling_utils import (
 from ...utils import logging
 from .configuration_albert import AlbertConfig
 
+from torch.autograd import profiler
 
 logger = logging.get_logger(__name__)
 
@@ -351,22 +352,27 @@ class AlbertLayer(nn.Module):
     def forward(
         self, hidden_states, attention_mask=None, head_mask=None, output_attentions=False, output_hidden_states=False
     ):
-        attention_output = self.attention(hidden_states, attention_mask, head_mask, output_attentions)
+	with profiler.record_function('2-attention'):
+	    attention_output = self.attention(hidden_states, attention_mask, head_mask, output_attentions)
 
-        ffn_output = apply_chunking_to_forward(
+	ffn_output = apply_chunking_to_forward(
             self.ff_chunk,
             self.chunk_size_feed_forward,
             self.seq_len_dim,
             attention_output[0],
         )
-        hidden_states = self.full_layer_layer_norm(ffn_output + attention_output[0])
+
+        with profiler.record_function('2-output'):
+	    hidden_states = self.full_layer_layer_norm(ffn_output + attention_output[0])
 
         return (hidden_states,) + attention_output[1:]  # add attentions if we output them
 
     def ff_chunk(self, attention_output):
-        ffn_output = self.ffn(attention_output)
-        ffn_output = self.activation(ffn_output)
-        ffn_output = self.ffn_output(ffn_output)
+	with profiler.record_function('2-intermediate'):
+            ffn_output = self.ffn(attention_output)
+            ffn_output = self.activation(ffn_output)
+	with profiler.record_function('2-output'):
+            ffn_output = self.ffn_output(ffn_output)
         return ffn_output
 
 
@@ -676,10 +682,13 @@ class AlbertModel(AlbertPreTrainedModel):
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
-        embedding_output = self.embeddings(
-            input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
-        )
-        encoder_outputs = self.encoder(
+        with profiler.record_function('1-embedding'):
+            embedding_output = self.embeddings(
+                input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
+            )
+
+        with profiler.record_function('2-encoder'):
+	    encoder_outputs = self.encoder(
             embedding_output,
             extended_attention_mask,
             head_mask=head_mask,
@@ -690,7 +699,8 @@ class AlbertModel(AlbertPreTrainedModel):
 
         sequence_output = encoder_outputs[0]
 
-        pooled_output = self.pooler_activation(self.pooler(sequence_output[:, 0])) if self.pooler is not None else None
+        with profiler.record_function('3-pooler'):
+	    pooled_output = self.pooler_activation(self.pooler(sequence_output[:, 0])) if self.pooler is not None else None
 
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
