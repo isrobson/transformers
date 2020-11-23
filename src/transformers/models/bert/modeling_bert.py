@@ -403,7 +403,7 @@ class BertLayer(nn.Module):
             head_mask,
             output_attentions=output_attentions,
         )
-	attention_output = self_attention_outputs[0]
+        attention_output = self_attention_outputs[0]
         outputs = self_attention_outputs[1:]  # add self attentions if we output attention weights
 
         if self.is_decoder and encoder_hidden_states is not None:
@@ -421,7 +421,7 @@ class BertLayer(nn.Module):
             attention_output = cross_attention_outputs[0]
             outputs = outputs + cross_attention_outputs[1:]  # add cross attentions if we output attention weights
 
-	layer_output = apply_chunking_to_forward(
+        layer_output = apply_chunking_to_forward(
             self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, attention_output
         )
 
@@ -429,7 +429,7 @@ class BertLayer(nn.Module):
         return outputs
 
     def feed_forward_chunk(self, attention_output):
-	with profiler.record_function('2-intermediate'):
+        with profiler.record_function('2-intermediate'):
             intermediate_output = self.intermediate(attention_output)
         with profiler.record_function('2-output'):
             layer_output = self.output(intermediate_output, attention_output)

@@ -352,10 +352,10 @@ class AlbertLayer(nn.Module):
     def forward(
         self, hidden_states, attention_mask=None, head_mask=None, output_attentions=False, output_hidden_states=False
     ):
-	with profiler.record_function('2-attention'):
-	    attention_output = self.attention(hidden_states, attention_mask, head_mask, output_attentions)
+        with profiler.record_function('2-attention'):
+            attention_output = self.attention(hidden_states, attention_mask, head_mask, output_attentions)
 
-	ffn_output = apply_chunking_to_forward(
+        ffn_output = apply_chunking_to_forward(
             self.ff_chunk,
             self.chunk_size_feed_forward,
             self.seq_len_dim,
@@ -363,15 +363,15 @@ class AlbertLayer(nn.Module):
         )
 
         with profiler.record_function('2-output'):
-	    hidden_states = self.full_layer_layer_norm(ffn_output + attention_output[0])
+            hidden_states = self.full_layer_layer_norm(ffn_output + attention_output[0])
 
         return (hidden_states,) + attention_output[1:]  # add attentions if we output them
 
     def ff_chunk(self, attention_output):
-	with profiler.record_function('2-intermediate'):
+        with profiler.record_function('2-intermediate'):
             ffn_output = self.ffn(attention_output)
             ffn_output = self.activation(ffn_output)
-	with profiler.record_function('2-output'):
+        with profiler.record_function('2-output'):
             ffn_output = self.ffn_output(ffn_output)
         return ffn_output
 
@@ -688,7 +688,7 @@ class AlbertModel(AlbertPreTrainedModel):
             )
 
         with profiler.record_function('2-encoder'):
-	    encoder_outputs = self.encoder(
+            encoder_outputs = self.encoder(
             embedding_output,
             extended_attention_mask,
             head_mask=head_mask,
@@ -700,7 +700,7 @@ class AlbertModel(AlbertPreTrainedModel):
         sequence_output = encoder_outputs[0]
 
         with profiler.record_function('3-pooler'):
-	    pooled_output = self.pooler_activation(self.pooler(sequence_output[:, 0])) if self.pooler is not None else None
+            pooled_output = self.pooler_activation(self.pooler(sequence_output[:, 0])) if self.pooler is not None else None
 
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
