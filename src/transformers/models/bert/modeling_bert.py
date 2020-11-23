@@ -28,6 +28,8 @@ import torch.utils.checkpoint
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
+from torch.autograd import profiler
+
 from ...activations import ACT2FN
 from ...file_utils import (
     ModelOutput,
