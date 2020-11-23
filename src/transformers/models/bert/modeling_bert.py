@@ -55,7 +55,6 @@ from ...modeling_utils import (
 from ...utils import logging
 from .configuration_bert import BertConfig
 
-
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "BertConfig"
@@ -86,7 +85,6 @@ BERT_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "wietsedv/bert-base-dutch-cased",
     # See all BERT models at https://huggingface.co/models?filter=bert
 ]
-
 
 def load_tf_weights_in_bert(model, config, tf_checkpoint_path):
     """Load tf checkpoints in a pytorch model."""
@@ -395,13 +393,14 @@ class BertLayer(nn.Module):
         encoder_attention_mask=None,
         output_attentions=False,
     ):
-        self_attention_outputs = self.attention(
+        with profiler.record_function('2-attention'):
+            self_attention_outputs = self.attention(
             hidden_states,
             attention_mask,
             head_mask,
             output_attentions=output_attentions,
         )
-        attention_output = self_attention_outputs[0]
+	attention_output = self_attention_outputs[0]
         outputs = self_attention_outputs[1:]  # add self attentions if we output attention weights
 
         if self.is_decoder and encoder_hidden_states is not None:
@@ -419,15 +418,18 @@ class BertLayer(nn.Module):
             attention_output = cross_attention_outputs[0]
             outputs = outputs + cross_attention_outputs[1:]  # add cross attentions if we output attention weights
 
-        layer_output = apply_chunking_to_forward(
+	layer_output = apply_chunking_to_forward(
             self.feed_forward_chunk, self.chunk_size_feed_forward, self.seq_len_dim, attention_output
         )
+
         outputs = (layer_output,) + outputs
         return outputs
 
     def feed_forward_chunk(self, attention_output):
-        intermediate_output = self.intermediate(attention_output)
-        layer_output = self.output(intermediate_output, attention_output)
+	with profiler.record_function('2-intermediate'):
+            intermediate_output = self.intermediate(attention_output)
+        with profiler.record_function('2-output'):
+            layer_output = self.output(intermediate_output, attention_output)
         return layer_output
 
 
@@ -834,10 +836,12 @@ class BertModel(BertPreTrainedModel):
         # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
-        embedding_output = self.embeddings(
-            input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
-        )
-        encoder_outputs = self.encoder(
+        with profiler.record_function('1-embeddings'):
+            embedding_output = self.embeddings(
+                input_ids=input_ids, position_ids=position_ids, token_type_ids=token_type_ids, inputs_embeds=inputs_embeds
+            )
+        with profiler.record_function('2-encoder'):
+            encoder_outputs = self.encoder(
             embedding_output,
             attention_mask=extended_attention_mask,
             head_mask=head_mask,
@@ -848,7 +852,8 @@ class BertModel(BertPreTrainedModel):
             return_dict=return_dict,
         )
         sequence_output = encoder_outputs[0]
-        pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
+        with profiler.record_function('3-pooler'):
+            pooled_output = self.pooler(sequence_output)
 
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
